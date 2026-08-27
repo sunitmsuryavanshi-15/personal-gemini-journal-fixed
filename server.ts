@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -10,16 +9,14 @@ dotenv.config({
   path: path.resolve(process.cwd(), '.env')
 });
 
-// Check whether Gemini API key is loaded
 console.log(
   'Gemini API Key loaded:',
   !!process.env.GEMINI_API_KEY
 );
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
+
+// Render provides PORT automatically
 const PORT = Number(process.env.PORT) || 3000;
 
 // --------------------------------------------------
@@ -45,7 +42,7 @@ function getGeminiClient(): GoogleGenAI {
       );
 
       throw new Error(
-        'GEMINI_API_KEY is not configured on the server. Please set it in .env'
+        'GEMINI_API_KEY is not configured on the server.'
       );
     }
 
@@ -69,7 +66,7 @@ const MODEL_FALLBACK_LADDER = [
 ];
 
 // --------------------------------------------------
-// Gemini Content Generation Helper
+// Gemini Content Generation
 // --------------------------------------------------
 
 async function generateContentWithFallback(params: {
@@ -108,9 +105,6 @@ async function generateContentWithFallback(params: {
       );
 
       lastError = error;
-
-      // Try next model
-      continue;
     }
   }
 
@@ -167,10 +161,6 @@ app.post(
         return;
       }
 
-      // ------------------------------------------------
-      // System Instruction
-      // ------------------------------------------------
-
       const systemInstruction = `
 You are a supportive, insightful, and mindful AI Journaling Companion.
 
@@ -190,8 +180,7 @@ Your role:
 - Keep responses concise,
   around 2 to 4 paragraphs maximum.
 
-- IMPORTANT SAFETY DIRECTIVE:
-  You are a reflective journaling aid,
+- You are a reflective journaling aid,
   NOT a medical or mental health professional.
 
 - Do not make psychiatric or clinical diagnoses.
@@ -199,10 +188,6 @@ Your role:
 - If a user expresses extreme crisis or self-harm,
   gently encourage reaching out to professional help.
 `;
-
-      // ------------------------------------------------
-      // Convert messages to Gemini format
-      // ------------------------------------------------
 
       const formattedContents = messages.map(
         (m: any) => ({
@@ -220,10 +205,6 @@ Your role:
         })
       );
 
-      // ------------------------------------------------
-      // Add journal context if available
-      // ------------------------------------------------
-
       if (journalContext) {
         formattedContents.unshift({
           role: 'user',
@@ -238,10 +219,6 @@ ${journalContext}
           ]
         });
       }
-
-      // ------------------------------------------------
-      // Generate Gemini response
-      // ------------------------------------------------
 
       const result =
         await generateContentWithFallback({
@@ -260,7 +237,6 @@ ${journalContext}
       });
 
     } catch (error: any) {
-
       console.error(
         'Chat endpoint error:',
         error
@@ -282,9 +258,7 @@ ${journalContext}
 app.post(
   '/api/gemini/summary',
   async (req: Request, res: Response) => {
-
     try {
-
       const data =
         req.body &&
         typeof req.body === 'object'
@@ -297,7 +271,6 @@ app.post(
           : [];
 
       if (messages.length === 0) {
-
         res.status(400).json({
           error:
             'Messages array is required for summary generation.'
@@ -305,10 +278,6 @@ app.post(
 
         return;
       }
-
-      // ------------------------------------------------
-      // Conversation Transcript
-      // ------------------------------------------------
 
       const conversationTranscript =
         messages
@@ -321,10 +290,6 @@ app.post(
               }: ${m.content}`
           )
           .join('\n\n');
-
-      // ------------------------------------------------
-      // Summary Prompt
-      // ------------------------------------------------
 
       const prompt = `
 Analyze this reflective journaling conversation
@@ -408,17 +373,11 @@ Use this exact structure:
 }
 `;
 
-      // ------------------------------------------------
-      // Generate Summary
-      // ------------------------------------------------
-
       const result =
         await generateContentWithFallback({
-
           contents: [
             {
               role: 'user',
-
               parts: [
                 {
                   text: prompt
@@ -431,17 +390,11 @@ Use this exact structure:
             responseMimeType: 'application/json',
             temperature: 0.3
           }
-
         });
-
-      // ------------------------------------------------
-      // Parse JSON
-      // ------------------------------------------------
 
       let parsedResponse: any;
 
       try {
-
         const cleanJson =
           result.text
             .replace(/```json\n?|\n?```/gi, '')
@@ -451,16 +404,13 @@ Use this exact structure:
           JSON.parse(cleanJson);
 
       } catch (parseError) {
-
         console.warn(
           'JSON parse error:',
           parseError
         );
 
         parsedResponse = {
-
-          title:
-            'Daily Journal Reflection',
+          title: 'Daily Journal Reflection',
 
           summary:
             result.text.slice(0, 300),
@@ -474,7 +424,6 @@ Use this exact structure:
           ],
 
           moodInsight: {
-
             mood: 'Reflective',
 
             moodConfidence: 80,
@@ -489,8 +438,7 @@ Use this exact structure:
               'Daily Life'
             ],
 
-            energyLevel:
-              'Moderate',
+            energyLevel: 'Moderate',
 
             suggestedAction:
               'Take a gentle breath and acknowledge your mindful progress today.'
@@ -498,32 +446,21 @@ Use this exact structure:
         };
       }
 
-      // ------------------------------------------------
-      // Send Response
-      // ------------------------------------------------
-
       res.json({
-
         data: parsedResponse,
-
-        modelUsed:
-          result.modelUsed
-
+        modelUsed: result.modelUsed
       });
 
     } catch (error: any) {
-
       console.error(
         'Summary endpoint error:',
         error
       );
 
       res.status(500).json({
-
         error:
           error?.message ||
           'Failed to generate journal summary.'
-
       });
     }
   }
@@ -536,9 +473,7 @@ Use this exact structure:
 app.post(
   '/api/gemini/insights',
   async (req: Request, res: Response) => {
-
     try {
-
       const data =
         req.body &&
         typeof req.body === 'object'
@@ -550,14 +485,8 @@ app.post(
           ? data.entries
           : [];
 
-      // ------------------------------------------------
-      // No entries
-      // ------------------------------------------------
-
       if (entries.length === 0) {
-
         res.json({
-
           weeklyTheme:
             'Beginning Your Mindfulness Journey',
 
@@ -566,34 +495,20 @@ app.post(
 
           encouragement:
             'Start your first journal chat today to unlock personalized insights!'
-
         });
 
         return;
       }
 
-      // ------------------------------------------------
-      // Prepare summaries
-      // ------------------------------------------------
-
       const summaries =
         entries
           .slice(0, 10)
           .map((e: any) => ({
-
             title: e.title,
-
             mood: e.mood,
-
             themes: e.keyThemes,
-
             summary: e.summary
-
           }));
-
-      // ------------------------------------------------
-      // Insights Prompt
-      // ------------------------------------------------
 
       const prompt = `
 Analyze these recent user journal entries
@@ -621,17 +536,11 @@ Provide a JSON output with:
 }
 `;
 
-      // ------------------------------------------------
-      // Generate Insights
-      // ------------------------------------------------
-
       const result =
         await generateContentWithFallback({
-
           contents: [
             {
               role: 'user',
-
               parts: [
                 {
                   text: prompt
@@ -641,19 +550,12 @@ Provide a JSON output with:
           ],
 
           config: {
-
             responseMimeType:
               'application/json',
 
             temperature: 0.4
-
           }
-
         });
-
-      // ------------------------------------------------
-      // Parse JSON
-      // ------------------------------------------------
 
       const cleanJson =
         result.text
@@ -666,18 +568,15 @@ Provide a JSON output with:
       res.json(parsed);
 
     } catch (error: any) {
-
       console.error(
         'Insights aggregation error:',
         error
       );
 
       res.status(500).json({
-
         error:
           error?.message ||
           'Failed to aggregate journal insights.'
-
       });
     }
   }
@@ -695,13 +594,11 @@ async function startServer() {
 
     const vite =
       await createViteServer({
-
         server: {
           middlewareMode: true
         },
 
         appType: 'spa'
-
       });
 
     app.use(
@@ -723,31 +620,23 @@ async function startServer() {
     app.get(
       '*',
       (req, res) => {
-
         res.sendFile(
           path.join(
             distPath,
             'index.html'
           )
         );
-
       }
     );
   }
-
-  // ------------------------------------------------
-  // Start Server
-  // ------------------------------------------------
 
   app.listen(
     PORT,
     '0.0.0.0',
     () => {
-
       console.log(
-        `Personal Gemini Journal server running on http://0.0.0.0:${PORT}`
+        `Personal Gemini Journal server running on port ${PORT}`
       );
-
     }
   );
 }
